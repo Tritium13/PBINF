@@ -1,0 +1,562 @@
+---
+title: "Homework"
+author: "Bjoern von Domarus"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+bibliography: references.bib
+link-citations: yes
+csl: nature.csl
+---
+
+```{r setup, include=FALSE, echo=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(gridExtra)
+
+# Read data from Excel sheets
+df1 <- read_excel("Shannon-21-Hippo-Data.xlsx", sheet = "Hippo_Body_Size")
+df2 <- read_excel("Shannon-21-Hippo-Data.xlsx", sheet = "Hippo_Canine_Size_Data")
+
+# Rename the columns in df2 to match df1
+names(df2)[names(df2) == "Age"] <- "age"
+names(df2)[names(df2) == "Sex"] <- "sex"
+names(df2)[names(df2) == "Canine weight"] <- "canine_weight"
+
+# Add the "canine_weight" column from df2 to df1
+df1$canine_weight <- NA  # Initialize the column in df1 with NA values
+
+# Select the relevant columns from df2 and rename them to match df1
+df2_subset <- df2[, c("age", "sex", "canine_weight")]
+colnames(df2_subset) <- c("age", "sex", "canine_weight")
+
+# Merge the data frames using bind_rows()
+df <- bind_rows(df1, df2_subset)
+
+# Rename the variables in the 'sex' column
+df <- df %>%
+  mutate(sex = ifelse(sex == "Female", "F", ifelse(sex == "Male", "M", sex)))
+
+# Remove NA values for age and sex
+df <- df %>% filter(!is.na(age))
+df <- df %>% filter(!is.na(sex))
+
+# Removing df1, df2 and df2_subset
+rm(df1, df2, df2_subset)
+```
+
+# Abstract
+
+This report analyzes sexual size dimorphism (SSD) in megaherbivores, focusing on the significance of weapon size, more accurate the jaw and canine weight, in driving sexual differentiation. Using data from hippos in Uganda, this study reveals that males possess larger weapons than females, emphasizing the role of exaggerated traits in intrasexual competition.
+<br><br>
+
+
+# 1. Introduction
+Animal size evolution has been a topic of interest in evolutionary biology since the pioneering studies of Charles Darwin [@Darwin1860]. Various factors, including ecological constraints and sexual selection, influence the evolution of body size in different species [@Futuyma2013]. Sexual selection, particularly in polygynous species, often leads to the evolution of exaggerated traits, such as weapons (e.g., antlers, horns) used in intrasexual competition [@Andersson1994]. This phenomenon, known as sexual size dimorphism (SSD), describes the morphological differences between males and females and is a common feature in many animal species [@Emlen1977].
+
+In megaherbivores, SSD can be particularly pronounced, with males often exhibiting larger body size and weapons (such as horns or tusks) compared to those of females [@Clutton-Brock1991]. Understanding the magnitude of SSD in these species is crucial for unraveling the evolutionary processes and selective pressures that is driving these differences.
+
+This report focuses on quantifying and describing SSD in megaherbivores using effect size measures, specifically Cohen's d, as demonstrated in the study by Shannon et al., 2021 [@Shannon2021]. By employing effect size measures, we can gain insights into the magnitude of SSD and compare it across different megaherbivore species.
+
+We hypothesize that weapon size is a key determinant of sexual size dimorphism in megaherbivores, with males exhibiting larger weapons compared to females. Specifically, we predict that there will be a significant difference in weapon size between male and female individuals, indicating the presence of sexual size dimorphism driven by the evolution of exaggerated weapons.
+<br><br>
+
+
+# 2. Data
+
+This report utilizes the dataset published in the study by Shannon et al., 2021 [@Shannon2021]. The dataset was originally collected by Prof. Richard Laws (Nuffield Unit of Tropical Animal Ecology) and his research team in Uganda, specifically in the Queen Elizabeth National Park (QENP), between 1961 and 1966 [@Laws1968]. QENP covers an area of 1978 km^2^ and is situated in the southwest of Uganda. During the early 1960s, QENP harbored a population of approximately 15,000 hippos [@Laws2017].
+
+The dataset includes various characteristics of hippos, including jaw weight, body length, body height, body mass, girth, and canine weight. These measurements were recorded separately for males and females, and the corresponding data is presented in Table 1.
+<br><br>
+
+```{r sample_counts_name, echo = FALSE, error = FALSE, warnings = FALSE, results = "hide"}
+# List of body characteristics
+characteristics <- c("jaw_weight_kg", "total_body_length_cm", "height_cm", "body_mass_kg", "Girth", "canine_weight")
+
+# Initialize empty lists to store the counts and subsets for each characteristic
+counts <- list()
+subsets_male <- list()
+subsets_female <- list()
+
+# Loop through each characteristic
+for (char in characteristics) {
+  # Generate the variable in which only the values of the current characteristic are stored
+  subset <- df[!is.na(df[[char]]) & !is.na(df$age) & !is.na(df$sex), c("sex", "age", char)]
+  
+  # Store the total count of samples
+  counts[[char]] <- nrow(subset)
+  
+  # Subset the data for females and males
+  subset_male <- subset[subset$sex == "M", c("age", char)]
+  subset_female <- subset[subset$sex == "F", c("age", char)]
+  
+  # Store the count of samples for females and males
+  counts_male <- nrow(subset_male)
+  counts_female <- nrow(subset_female)
+  
+  # Store the subsets for females and males
+  subsets_male[[char]] <- subset_male
+  subsets_female[[char]] <- subset_female
+  
+  # Validate the counts
+  if ((counts_male + counts_female) != counts[[char]]) {
+    stop(paste("Error: The total sample size of", char, "does not match the sum of samples for females and males!"))
+  }
+}
+
+# Create a data frame with the counts
+char_table <- c("Jaw weight [kg]", "Body length [cm]", "Body height [cm]", "Body mass [kg]", "Girth [cm]", "Canine weight [kg]")
+counts_table <- data.frame(
+  "Body characteristic" = char_table,
+  "n total" = unlist(counts),
+  "n female" = sapply(subsets_female, nrow),
+  "n male" = sapply(subsets_male, nrow)
+)
+```
+***
+**Table 1** *Total count of data values for each individual body
+characteristic additionally subdivided into the different sexes.*
+
+```{r counts_table, echo = FALSE, error = FALSE, warnings = FALSE}
+# Print the table with the total counts and subdivided counts for each body charactersitic
+kable(counts_table, align = "lccc", col.names = c("Body characteristic", "n total", "n female", "n male"), format = "pipe", row.names = FALSE)
+```
+***
+<br><br>
+
+The dataset provides a comprehensive collection of measurements for various characteristics of hippos, that allows for a detailed analysis of their morphological traits. Table 1 presents the total count of data values for each individual body characteristic, further subdivided into the different sexes. This rich dataset serves as a valuable resource for investigating the relationships and differences in these body characteristics between the sexes and exploring the overall variation within the hippo population.
+<br><br>
+
+
+# 3. Statistical Analysis
+
+All statistical evaluations were performed using `r R.version$version.string` with the following packages:
+
++ readxl
++ ggplot2
++ dplyr
++ knitr
++ gridExtra
+
+The significance level used for hypothesis testing in this analysis was set at p < 0.05, following the conventional threshold for statistical significance. The p-value represents the probability of obtaining the observed results, or more extreme results, if the null hypothesis is true. If the p-value is below the significance level (p < 0.05), it is typically considered as evidence to reject the null hypothesis and support the alternative hypothesis [@Neyman1928].
+
+Considering the limited dataset and the nature of this study as a simple homework exercise, the application of multiple testing correction methods was deemed unnecessary. Multiple testing correction techniques, such as the Bonferroni correction or false discovery rate (FDR) correction, are typically employed in scenarios involving large-scale studies with numerous statistical tests conducted simultaneously, to control the overall error rate. However, due to the relatively small amount of data on the weapon size characteristics to be examined (jaw and canine weight) and the focused nature of this analysis, the risk of inflated false positive rates associated with multiple comparisons was considered minimal. Hence, the decision was made not to employ multiple testing correction in the present analysis.
+
+To examine SSD between the two sexes based on their physical characteristics, the age distributions of the two groups must be compared first. Therefore, an auxiliary hypothesis is presented at this point, which takes into account the problem of the uniform age distribution across the groups of the sexes: There is no difference in the age distribution of the animals examined with regard to their sex. In order to confirm this thesis, a t-test is carried out for each physical characteristic in order to rule out a difference in the age distribution between the two groups.
+
+After confirmation of the auxiliary hypothesis, the data can be used to determine the effect size using Cohen's d, which is a widely used measure of effect size in statistical analysis, particularly when comparing two groups with unequal sample sizes. It provides a standardized measure of the difference between group means, taking into account the variability within each group. The calculation of Cohen's d involves dividing the mean difference between groups by the pooled standard deviation using this formula:
+
+<br>
+$$
+d = \frac{{\bar{x}_1 - \bar{x}_2}}{{\sqrt{{\frac{{(n_1 - 1)s_1^2 + (n_2 - 1)s_2^2}}{{n_1 + n_2 - 2}}}}}}
+$$
+<br>
+
+In this analysis, Cohen's d is employed to determine the effect size between females and males in terms of their physical characteristics. By quantifying the magnitude of SSD, Cohen's d enables us to assess the extent of differentiation between the two sexes. Interpreting Cohen's d follows a general guideline: larger values indicate larger effect sizes, with values around 0.2 considered small, around 0.5 considered medium, and above 0.8 considered large [@Cohen1988]. After confirming the auxiliary hypothesis regarding the age distribution, the calculation of Cohen's d becomes pertinent in this analysis. Given the unequal group sizes (as shown in Table 1), Cohen's d is applied to determine the effect size, providing valuable insights into the magnitude of SSD between females and males.
+<br><br>
+
+
+# 4. Results
+
+This chapter is divided into two main sections: descriptive analysis and inferential analysis. The descriptive analysis provides a comprehensive overview of the data, examining various characteristics and patterns observed in the variables of interest. It involves summarizing and visualizing the data, using visualization-techniques such as histograms, boxplots, and violin plots. On the other hand, the inferential analysis delves deeper into the data, aiming to draw meaningful conclusions and make statistical inferences about the population based on sample data. By separating the analysis into these two sections, it provides a detailed exploration of the data from both descriptive and inferential perspectives, offering a comprehensive understanding of the findings.
+<br><br>
+
+
+## 4.1 Descriptive Analysis
+
+The descriptive analysis aims to provide a comprehensive overview of the hippos' characteristics, categorized by sex. The dataset includes measurements of various body characteristics, such as jaw weight, body length, body height, body mass, girth, and canine weight (Table 1).
+<br><br>
+
+
+### 4.1.1 Age distribution
+
+First, the age distribution in the comparison of the two sexes is considered independently of a special body characteristic based on all data. A violin plot (Figure 1) combines a box plot with a mirrored density plot, offering a visual representation of the distribution and density of ages for females and males.
+<br>
+
+***
+```{r violinplot_all_age, echo = FALSE, message = FALSE, warning = FALSE, fig.align = 'center'}
+# Violin plot of age by sex
+ggplot(data = df, aes(x = sex, y = age, fill = sex)) +
+  geom_violin(trim = TRUE) +
+  labs(x = "Sex", y = "Age", fill = "", title = "Distribution of age by sex of the complete dataset") +
+  theme_minimal() +
+  scale_fill_manual(values = c("F" = "#F8766D", "M" = "#00BFC4"), labels = c("female", "male"))
+```
+
+**Figure 1** *Violin plots depicting the age distribution and age density (number of individual age statements of examined animals) across the female (red) and male (blue) sexes, utilizing the comprehensive dataset from Shannon et al., 2021 [@Shannon2021].*
+
+***
+<br>
+After the plot, a visual examination of the age distribution between the two groups (Figure 1) suggests no apparent differences. However, since the individual body characteristics are to be analyzed individually, a more detailed examination of the age distribution becomes necessary. This will ensure that age is properly taken into account in the subsequent analysis. In order to assess the SSD in terms of jaw weight and body length, histograms were created for each characteristic regarding their age distribution (Figure 2 and Figure 3, respectively). These plots provide a visual representation of the distribution and variability of each body trait, facilitating a more comprehensive comparison between females and males.
+
+***
+```{r histograms_age_jaw, fig.width = 7, fig.height = 4, echo = FALSE, message = FALSE, warning = FALSE, fig.show = "hold", fig.align = 'center'}
+# Set layout to have two columns
+par(mfrow = c(1, 2))  
+
+# Set the y-axis limits
+y_limit <- c(0, 30)
+
+# Extract the colors used in the Violin plot
+colors <- unique(ggplot_build(ggplot(data = df, aes(x = sex, y = age, fill = sex)) +
+  geom_violin(trim = FALSE))$data[[1]]$fill)
+
+# Subset the data frame for females and males based on non-NA values of jaw_weight_kg
+female_jaw <- subsets_female$jaw_weight_kg
+male_jaw <- subsets_male$jaw_weight_kg
+
+# Create the histograms to show the age distribution for each sex
+hist(female_jaw$age, col = colors[1],
+     xlab = "Age", ylab = "Frequency", main = "", ylim = y_limit)
+legend("top", legend = c("female", "male"), fill = colors,
+       bty = "n", ncol = 2, cex = 0.8)
+hist(male_jaw$age, col = colors[2],
+     xlab = "Age", ylab = "Frequency", main = "", ylim = y_limit)
+
+# Add a single title for both plots
+mtext("Age distribution of the individual sexes for the body characteristic: jaw weight in kg", side = 3, outer = TRUE, line = -2)
+```
+
+**Figure 2** *Histograms illustrating the age distribution of both sexes, female (red) and male (blue), for body characteristic jaw weight. The age is shown on the x-axis and the frequency of the occurring age on the y-axis.*
+
+***
+```{r histograms_age_length, fig.width=7, fig.height=4, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold", fig.align='center'}
+# Set layout to have two columns
+par(mfrow = c(1, 2))
+
+# Set the y-axis limits
+y_limit <- c(0, 400)
+
+# Extract the colors used in the Violin plot
+colors <- unique(ggplot_build(ggplot(data = df, aes(x = sex, y = age, fill = sex)) +
+  geom_violin(trim = FALSE))$data[[1]]$fill)
+
+# Subset the data frame for females and males based on non-NA values of jaw_weight_kg
+female_jaw <- subsets_female$total_body_length_cm
+male_jaw <- subsets_male$total_body_length_cm
+
+# Create the histograms to show the age distribution for each sex
+hist(female_jaw$age, col = colors[1],
+     xlab = "Age", ylab = "Frequency", main = "", ylim = y_limit)
+legend("top", legend = c("female", "male"), fill = colors,
+       bty = "n", ncol = 2, cex = 0.8)
+hist(male_jaw$age, col = colors[2],
+     xlab = "Age", ylab = "Frequency", main = "", ylim = y_limit)
+
+# Add a single title for both plots
+mtext("Age distribution of the individual sexes for the body characteristic: total body length in cm", side = 3, outer = TRUE, line = -2)
+```
+**Figure 3** *Histograms illustrating the age distribution of both sexes, female (red) and male (blue), for the characteristic total body length in cm. The age is shown on the x-axis and the frequency of the occurring age on the y-axis.*
+
+***
+
+The analysis of age distributions based on individual physical characteristics presents challenges in determining their distribution types. Initially, the age distribution for the physical characteristic of jaw weight appears to exhibit an even distribution, with comparable frequencies among age groups (Figure 2). Similarly, the plots depicting the age distribution for body length (Figure 3) suggest a consistent distribution. However, upon closer examination, an additional set of approximately 400 readings becomes apparent within the age range of 25 to 35 years. The presence of these readings raises questions regarding the underlying distribution's uniformity, which can be addressed through inferential statistics. Further analysis is necessary to ascertain the true nature of the observed distributions, which will be continued in the inferential analysis in chapter 4.2.1.
+<br><br>
+
+
+### 4.1.2 Distribution of weapon size
+
+After examining the age distribution of the two sexes, attention was directed towards investigating the weapon sizes, specifically the canine weight and jaw weight (Figure 4). These measurements were chosen as representatives of the weapon characteristics. To provide further insights, a comparison was made with a non-dimorphic body characteristic, namely body length (Figure 5). This comparison allowed for an exploration of the relationship between weapon size and other physical attributes that are less influenced by sexual dimorphism.
+
+***
+```{r boxplots_weapons, fig.width = 7, fig.height = 4, echo = FALSE, message = FALSE, warning = FALSE, fig.show = "hold", fig.align = 'center'}
+
+# Boxplot for jaw weight by sex
+plot_boxplot_jaw <- ggplot(data = df[!is.na(df$jaw_weight_kg) & !is.na(df$age), ], aes(x = sex, y = jaw_weight_kg, fill = sex)) +
+  geom_boxplot() +
+  labs(x = "Sex", y = "Jaw Weight (kg)", title = "Distribution of jaw weight by sex") +
+  scale_fill_manual(values = c(colors[1], colors[2]), labels = c("female", "male")) +
+  theme_minimal() +
+  guides(fill = guide_legend(title = "", nrow = 1, title.position = "top", title.theme = element_text(size = 12))) +
+  theme(legend.position = "bottom", legend.justification = "center")
+
+# Boxplot for canine weight by sex
+plot_boxplot_canine <- ggplot(data = df[!is.na(df$canine_weight) & !is.na(df$age), ], aes(x = sex, y = canine_weight, fill = sex)) +
+  geom_boxplot() +
+  labs(x = "Sex", y = "Canine Weight (kg)", title = "Distribution of canine weight by sex") +
+  scale_fill_manual(values = c(colors[1], colors[2]), labels = c("female", "male")) +
+  theme_minimal() +
+  guides(fill = guide_legend(title = "", nrow = 1, title.position = "top", title.theme = element_text(size = 12))) +
+  theme(legend.position = "bottom", legend.justification = "center")
+
+# Boxplot for body length by sex
+plot_boxplot_length <- ggplot(data = df[!is.na(df$total_body_length_cm) & !is.na(df$age), ], aes(x = sex, y = total_body_length_cm, fill = sex)) +
+  geom_boxplot() +
+  labs(x = "Sex", y = "Body length (cm)", title = "Distribution of body length by sex") +
+  scale_fill_manual(values = c(colors[1], colors[2]), labels = c("female", "male")) +
+  theme_minimal() +
+  guides(fill = guide_legend(title = "", nrow = 1, title.position = "top", title.theme = element_text(size = 12))) +
+  theme(legend.position = "bottom", legend.justification = "center")
+
+# Arrange plots side by side
+plot_jaw_weapons <- grid.arrange(plot_boxplot_jaw, plot_boxplot_canine, ncol = 2)
+
+# Return only the final plot without the grid.arrange output
+grid::grid.draw(plot_jaw_weapons)
+```
+**Figure 4** *Boxplots presenting the weapon sizes in the form of jaw weight and canine weight in kg for both sexes, namely female (depicted in red) and male (depicted in blue).*
+
+
+
+```{r boxplot_length, fig.width=7, fig.height=4, echo=FALSE, message=FALSE, warning=FALSE, fig.show="hold", fig.align='center'}
+plot_boxplot_length
+```
+**Figure 5** *Boxplot presenting the distribution of the body length in cm for both sexes, namely female (depicted in red) and male (depicted in blue).*
+
+***
+
+By including the analysis of body length alongside the examination of weapon sizes, a comprehensive overview of the physical characteristics under investigation was obtained. This approach enables a deeper understanding of how the distribution of weapon sizes compares to a characteristic, such as body length, that is less susceptible to sexual dimorphism. This additional context and comparison contribute to a more comprehensive analysis and interpretation of the data, enhancing the overall scientific inquiry.
+
+If we compare the distribution of weapon size between the two sexes (Figure 4), a notable difference becomes evident, warranting further investigation through inferential statistics. This observation suggests a potential significant disparity in weapon size between males and females. Conversely, when examining the distribution of body length (Figure 5), there appears to be no significant difference observed between the sexes.
+
+These findings highlight the need to delve deeper into the statistical analysis to determine the statistical significance of the observed differences in weapon size. In contrast, the similarity in body length distribution indicates a potential absence of sexual dimorphism in this particular characteristic. The inferential statistics will provide a more rigorous evaluation of these observations and enable a comprehensive understanding of the relationship between sex and these physical attributes.
+<br><br>
+
+
+## 4.2 Inferential Analysis
+
+The inferential analysis builds upon the descriptive analysis by employing statistical methods to draw meaningful conclusions and make inferences about the population based on the study sample. This section aims to investigate the presence of statistically significant differences between females and males in various body characteristics, including jaw weight, body length, body height, body mass, girth, and canine weight. By examining the sample data and applying appropriate statistical tests, we can gain insights into the larger population and determine if the observed differences are likely to be generalizable. The results of the inferential analysis will provide valuable insights into the potential sexual dimorphism in these body characteristics and contribute to a deeper understanding of the studied population.
+<br><br>
+
+
+### 4.2.1 Age distribution
+
+To further explore the differences between females and males, we conducted a comparative analysis of the age distribution. We employed a t-test, a widely used statistical test, to assess the significance of the differences in age between the two sexes. The t-test allows us to determine if the observed differences in age are statistically significant or only due to random variation.
+
+The output of the t-test analysis is presented in Table 2, which provides an overview of all the body characteristics along with their corresponding p-values. The p-value indicates the probability of observing the observed differences in age between females and males, assuming there is no true difference in the population. The classification of the p-values are based on conventional significance thresholds.
+
+By examining the p-values, we can determine which body characteristics exhibit significant differences in age distribution between females and males. These findings will shed light on potential sexual dimorphism in age and provide valuable insights into the studied population.
+
+```{r t.tests_all_characteristics, echo = FALSE, results = "hide"}
+# List of body characteristics
+characteristics <- c("jaw_weight_kg", "total_body_length_cm", "height_cm", "body_mass_kg", "Girth", "canine_weight")
+
+# Initialize empty vector to store the p-values
+p_values <- vector("double", length(characteristics))
+
+# Loop through each characteristic
+for (i in seq_along(characteristics)) {
+  char <- characteristics[i]
+  
+  # Perform t-test
+  t_result <- t.test(subsets_female[[char]]$age, subsets_male[[char]]$age)
+  
+  # Store the p-value in a easy readable format
+  p_values[i] <- t_result$p.value
+}
+
+# Classification function for p-values
+classify_p_value <- function(p_value) {
+  if (p_value >= 0.05) {
+    return("not significant")
+  } else if (p_value >= 0.01) {
+    return("significant")
+  } else if (p_value >= 0.001) {
+    return("highly significant")
+  } else {
+    return("extremely significant")
+  }
+}
+
+# Create a data frame with the p-values and classifications
+classification_table <- data.frame(
+  "Body characteristic" = char_table,
+  "p-value" = sprintf("%.3f", p_values),
+  "Classification" = sapply(p_values, classify_p_value),
+  stringsAsFactors = FALSE
+)
+```
+
+***
+**Table 2** *Results checking for significance between the two sexes in relation to their age distribution using t-test including the classification labels of p-values for each body characteristic.*
+
+```{r significance_table, echo = FALSE}
+# Print the table with the p-values an the significance characterization
+kable(classification_table, align = "lcc", col.names = c("Body characteristic", "p-value", "Classification"), format = "pipe", row.names = FALSE)
+```
+***
+
+Based on the analysis presented in Table 2, the age distribution shows a significant difference between females and males in all body characteristics, except for the gun size categories. This suggests that the two sexes are well comparable in terms of their age distribution in terms of weapon size.
+<br><br>
+
+
+### 4.2.2 Distribution of weapon sizes
+
+However, when examining the other body characteristics, significant differences are observed between females and males. These findings indicate that making conclusive statements about the significance of SSD based on these body characteristics is not straightforward. Further analysis and consideration of additional factors may be necessary to gain a deeper understanding of the observed differences and their implications.
+
+Overall, the results emphasize the importance of carefully examining multiple body characteristics and considering the context in order to draw meaningful conclusions about sexual dimorphism within the studied population.
+
+This suggests that the age distribution between the two sexes is comparable when considering weapon size. The finding aligns with the previously hypothesized existence of sexual size dimorphism (SSD) in relation to weapon size. To further understand the direction and magnitude of this effect, Cohen's d, an effect size measure, is utilized.
+
+Cohen's d provides a standardized measure of the difference between the means of two groups, taking into account the variability within each group. By calculating Cohen's d for the weapon sizes, we can quantify the effect size and gain insights into the magnitude of the observed differences between females and males. This analysis will help shed light on the extent to which SSD influences the weapon size variations between the sexes.
+
+```{r cohens_d_calculation, echo = FALSE, results = "hide"}
+# Vector of characteristic names
+characteristics <- c("jaw_weight_kg", "total_body_length_cm", "height_cm", "body_mass_kg", "Girth", "canine_weight")
+
+# Empty vector to store Cohen's d values
+cohens_d <- numeric(length(characteristics))
+
+# Loop through each characteristic
+for (i in 1:length(characteristics)) {
+  # Subset data for females and males
+  subset_female <- df[df$sex == "F", characteristics[i]]
+  subset_male <- df[df$sex == "M", characteristics[i]]
+  
+  # Convert variables to numeric
+  subset_female <- as.numeric(unlist(subset_female))
+  subset_male <- as.numeric(unlist(subset_male))
+  
+  # Exclude missing values
+  subset_female <- subset_female[!is.na(subset_female)]
+  subset_male <- subset_male[!is.na(subset_male)]
+  
+  # Calculate means and standard deviations
+  mean_female <- mean(subset_female)
+  mean_male <- mean(subset_male)
+  sd_female <- sd(subset_female)
+  sd_male <- sd(subset_male)
+  
+  # Calculate pooled standard deviation
+  n_female <- length(subset_female)
+  n_male <- length(subset_male)
+  pooled_sd <- sqrt(((n_female - 1) * sd_female^2 + (n_male - 1) * sd_male^2) / (n_female + n_male - 2))
+  
+  # Calculate Cohen's d
+  cohens_d[i] <- (mean_male - mean_female) / pooled_sd
+}
+
+# Assign the Cohen's d values to variables
+cohens_d_jaw <- cohens_d[1]
+cohens_d_length <- cohens_d[2]
+cohens_d_height <- cohens_d[3]
+cohens_d_mass <- cohens_d[4]
+cohens_d_girth <- cohens_d[5]
+cohens_d_canine <- cohens_d[6]
+
+```
+
+
+```{r cohens_d_classification, echo = FALSE, results = "hide"}
+# Classification of Cohen's d
+classify_cohens_d <- function(cohens_d) {
+  if (cohens_d < 0.2) {
+    return("none")
+  } else if (cohens_d <= 0.5) {
+    return("small effect")
+  } else if (cohens_d <= 0.8) {
+    return("medium effect")
+  } else {
+    return("large effect")
+  }
+}
+
+# Vector of characteristic names
+characteristics <- c("jaw", "length", "height", "mass", "girth", "canine")
+
+# Empty vector to store effect classifications
+effect_classifications <- character(length(characteristics))
+
+# Loop through each characteristic
+for (i in 1:length(characteristics)) {
+  # Get the absolute value of Cohen's d for the current characteristic
+  cohens_d <- abs(get(paste0("cohens_d_", characteristics[i])))
+  
+  # Classify the Cohen's d value
+  classification <- classify_cohens_d(cohens_d)
+  
+  # Store the classification result in the effect_classifications vector
+  effect_classifications[i] <- classification
+}
+
+# Assign the effect classifications to individual variables
+effect_jaw <- effect_classifications[1]
+effect_length <- effect_classifications[2]
+effect_height <- effect_classifications[3]
+effect_mass <- effect_classifications[4]
+effect_girth <- effect_classifications[5]
+effect_canine <- effect_classifications[6]
+```
+
+```{r cohens_d_table_complete, echo = FALSE, results = "hide"}
+# Create a data frame for Cohen's d values and classifications
+cohens_d_table <- data.frame(
+  Characteristic = characteristics,
+  `Cohen's d` = round(sapply(characteristics, function(char) abs(get(paste0("cohens_d_", char)))), 3),
+  Classification = sapply(characteristics, function(char) get(paste0("effect_", char))),
+  stringsAsFactors = FALSE
+)
+
+# Print the table
+kable(cohens_d_table, align = "lcc", col.names = c("Body Characteristic", "Cohen's d", "Classification"), format = "pipe", row.names = FALSE)
+
+```
+
+***
+**Table 3** *Results for the calculation of the Cohen's d for the weapon sizes including the characterization of the calculated Cohen's d.*
+
+```{r cohens_weapon_table, echo = FALSE}
+# Create a data frame for Cohen's d values and classifications
+cohens_d_table <- data.frame(
+  Characteristic = characteristics,
+  `Cohen's d` = round(sapply(characteristics, function(char) abs(get(paste0("cohens_d_", char)))), 3),
+  Classification = sapply(characteristics, function(char) get(paste0("effect_", char))),
+  stringsAsFactors = FALSE
+)
+
+# Filter the data frame to include only "jaw" and "canine" characteristics
+cohens_d_table <- cohens_d_table[cohens_d_table$Characteristic %in% c("jaw", "canine"), ]
+
+# Update the column names
+colnames(cohens_d_table) <- c("Body Characteristic", "Cohen's d", "Classification")
+cohens_d_table$`Body Characteristic` <- c("Jaw Weight", "Canine Weight")
+
+# Print the table
+kable(cohens_d_table, align = "lcc", format = "pipe", row.names = FALSE)
+
+```
+
+***
+
+Table 3 summarizes the presence of large effects in weapon sizes. The effect size for jaw weight, as assessed by Cohen's d, was determined to be d = `r round(cohens_d_jaw, 2)`, indicating a significant and meaningful effect. This substantial effect size highlights a notable difference in jaw weight between the investigated groups of females and males, carrying potential implications for understanding the physiological and anatomical characteristics associated with jaw weight.
+
+Similarly, Cohen's d for canine weight yielded an effect size of d = `r round(cohens_d_canine, 2)`, signifying a pronounced and statistically significant effect. This large effect size underscores a substantial difference in canine weight between females and males. The comparison of effect sizes for both jaw weight (d = `r round(cohens_d_jaw, 2)`) and canine weight (d = `r round(cohens_d_canine, 2)`) reveals that both characteristics exhibit considerable effects. These findings emphasize the significant contributions of jaw and canine weight to the observed differences in weight distribution between females and males.
+
+These results shed light on the potential importance of jaw and canine weight as distinguishing features in the sexual dimorphism of the studied population. The substantial effect size suggests the existence of distinct physiological or morphological differences in the size and weight of canines, thereby providing insights into sexual dimorphism and other factors influencing canine weight.
+
+Notably, the positive values of Cohen's d for both characteristics indicate that male animals possess more prominent and larger weapons compared to female animals. This finding confirms the previously hypothesized role of weapon size as a crucial determinant of sexual size dimorphism in megaherbivores, with males exhibiting larger weapons compared to females.
+<br><br>
+
+
+# 5. Discussion
+
+The present study aimed to investigate sexual size dimorphism (SSD) in megaherbivores, focusing on the role of weapon size as a key determinant. Through a comprehensive analysis of various body characteristics, including jaw weight, body length, body height, body mass, girth, and canine weight, we obtained valuable insights into the differences between female and male individuals.
+
+Our descriptive analysis revealed significant differences in the age distribution between the sexes, specifically in relation to weapon size. This supports the hypothesis that SSD exists with regard to weapon size in megaherbivores. Additionally, the comparison of body circumference showed no significant differences between females and males, indicating that certain body characteristics may not exhibit pronounced sexual dimorphism.
+
+Further analysis using inferential statistics, such as t-tests and Cohen's d effect size measure, allowed us to delve deeper into the significance of these findings. The t-test results indicated that the age distribution was only significant in the context of weapon size, highlighting the distinctiveness of this characteristic. Moreover, the calculated Cohen's d values demonstrated large effects for weapon sizes, with male animals displaying more pronounced and larger weapons compared to their female counterparts.
+
+In light of these results, it becomes evident that weapon size plays a crucial role in shaping sexual size dimorphism among megaherbivores. The positive Cohen's d values for weapon size suggest that males have evolved to possess larger weapons, reinforcing their competitive advantage in intrasexual conflicts and mate selection[@Andersson1994]. This finding aligns with previous hypotheses and supports the notion that weapon size contributes significantly to the observed sexual dimorphism in megaherbivores.
+
+In conclusion, our study provides compelling evidence for the existence of sexual size dimorphism in megaherbivores, particularly in relation to weapon size. The significant differences observed in the age distribution and the large effects identified through Cohen's d highlight the distinctiveness of weapon size as a sexually dimorphic characteristic. These findings contribute to our understanding of the mechanisms driving sexual dimorphism in megaherbivores and emphasize the role of weapon size in this context.
+
+Future studies should explore additional factors that may contribute to sexual size dimorphism, such as ecological pressures, reproductive strategies, and social dynamics. By gaining a more comprehensive understanding of these underlying factors, we can further elucidate the evolutionary significance of sexual size dimorphism in megaherbivores and its implications for their survival and reproductive success.
+<br><br>
+
+
+## 5.1 Availability of software, code, data
+
+The software used for data analysis in this study was implemented in R, a widely used programming language for statistical computing and graphics. The R code for data preprocessing, descriptive statistics, inferential analysis, and effect size calculations can be made available upon request.
+
+The dataset used in this study, which includes measurements of various body features and weapon sizes of female and male megaherbivores, is based on the work of Prof Richard Laws [@Laws1968]. The dataset used is from the publication by Shannon et al., 2021. [@Shannon2021].
+
+Researchers interested in replicating or extending this study are encouraged to contact the corresponding author for further details on accessing the software code and data. We believe in fostering collaboration and advancing scientific knowledge through transparent and reproducible research practices.
+<br><br>
+
+
+# References
+
